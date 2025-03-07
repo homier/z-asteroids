@@ -2,12 +2,18 @@ const std = @import("std");
 const rl = @import("raylib");
 
 const Arena = @import("./arena.zig").Arena;
+const asteroid = @import("entities/asteroid.zig");
+const utils = @import("utils.zig");
+const sounds = @import("resources/sounds.zig");
 
 const screenWidth = 1280;
 const screenHeight = 720;
 const targetFps = 60;
 
 pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+
     rl.initWindow(screenWidth, screenHeight, "Asteroids");
     defer rl.closeWindow(); // Close window and OpenGL context
 
@@ -23,9 +29,15 @@ pub fn main() !void {
     });
     const rand = prng.random();
 
-    const backgroundSound = try rl.loadSound("resources/audio/background.mp3");
-    defer rl.unloadSound(backgroundSound);
+    const soundResources = try sounds.Sounds.load();
+    defer soundResources.deinit();
 
-    var arena = Arena.init(&rand, backgroundSound);
-    try arena.loop();
+    var arena = try Arena.init(allocator, &rand, soundResources);
+    defer arena.deinit();
+
+    while (!rl.windowShouldClose()) {
+        try arena.handleInput();
+        arena.update();
+        arena.draw();
+    }
 }

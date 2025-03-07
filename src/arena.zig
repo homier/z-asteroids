@@ -1,138 +1,228 @@
 const std = @import("std");
 const rl = @import("raylib");
 
-const shipl = @import("./ship.zig");
-const starl = @import("./star.zig");
 const utils = @import("./utils.zig");
 
-const initialStarsConut = 5;
+const asteroid = @import("./entities/asteroid.zig");
+const player = @import("./entities/player.zig");
+const projectile = @import("./entities/projectile.zig");
+
+const arena_drawer = @import("./ui/arena.zig");
+
+const sound_resources = @import("./resources/sounds.zig");
+
+const SHOOTING_THROTTLE_DURATION = 200; // 0.2 sec
+const ASTEROIDS_MIN_COUNT = 5;
 
 pub const Arena = struct {
-    ship: shipl.Ship = undefined,
-    stars: std.ArrayList(starl.Star),
-
+    allocator: std.mem.Allocator,
     rand: *const std.Random,
 
+    player: player.Player = undefined,
+    asteroids: asteroid.AsteroidRegistry,
+    projectiles: projectile.ProjectileRegistry,
+
+    lastShootAt: i64 = 0,
+
+    drawer: arena_drawer.ArenaDrawer,
+
     playerScore: u32 = 0,
-    starsAlive: usize = 0,
+    playerLifes: u8 = 5,
 
-    backgroundSound: rl.Sound,
+    screen: rl.Rectangle,
+    sounds: sound_resources.Sounds,
 
-    pub fn init(rand: *const std.Random, backgroundSound: rl.Sound) Arena {
-        return Arena{
-            .ship = shipl.Ship.init(),
-            .stars = std.ArrayList(starl.Star).init(std.heap.page_allocator),
+    pub fn init(
+        allocator: std.mem.Allocator,
+        rand: *const std.Random,
+        sounds: sound_resources.Sounds,
+    ) !Arena {
+        return .{
+            .allocator = allocator,
             .rand = rand,
-            .backgroundSound = backgroundSound,
+
+            .player = player.Player.init(utils.screenMiddle()),
+            .projectiles = projectile.ProjectileRegistry.init(allocator),
+            .asteroids = asteroid.AsteroidRegistry.init(allocator),
+
+            .drawer = try arena_drawer.ArenaDrawer.init(false),
+
+            .screen = utils.screenRectangle(),
+            .sounds = sounds,
         };
     }
 
-    pub fn loop(self: *Arena) !void {
-        defer self.stars.deinit();
-        rl.playSound(self.backgroundSound);
-
-        while (!rl.windowShouldClose()) {
-            if (!rl.isSoundPlaying(self.backgroundSound)) {
-                rl.playSound(self.backgroundSound);
-            }
-
-            self.handleInput();
-            try self.update();
-
-            rl.beginDrawing();
-            defer rl.endDrawing();
-
-            rl.clearBackground(rl.Color.black);
-
-            self.drawObjects();
-        }
+    pub fn deinit(self: *Arena) void {
+        self.asteroids.deinit();
+        self.projectiles.deinit();
     }
 
-    fn handleInput(self: *Arena) void {
+    pub fn update(self: *Arena) void {
+        self.screen = utils.screenRectangle();
+
+        self.updateProjectiles();
+        self.updateAsteroids();
+        self.updatePlayer();
+    }
+
+    pub fn addAsteroid(self: *Arena, position: rl.Vector2, level: asteroid.Asteroid.Level) !void {
+        const a = asteroid.Asteroid.init(position, level, self.rand);
+
+        try self.asteroids.add(a);
+    }
+
+    pub fn handleInput(self: *Arena) !void {
         if (rl.isKeyDown(.right) or rl.isKeyDown(.d)) {
-            self.ship.accelerate(shipl.speed, 0);
+            self.player.rotate(2);
         }
 
         if (rl.isKeyDown(.left) or rl.isKeyDown(.a)) {
-            self.ship.accelerate(-shipl.speed, 0);
+            self.player.rotate(-2);
         }
 
         if (rl.isKeyDown(.up) or rl.isKeyDown(.w)) {
-            self.ship.accelerate(0, -shipl.speed);
+            self.player.accelerate(0, -0.5);
         }
 
         if (rl.isKeyDown(.down) or rl.isKeyDown(.s)) {
-            self.ship.accelerate(0, shipl.speed);
+            self.player.accelerate(0, 0.5);
         }
 
-        if (rl.isKeyDown(.enter)) {
-            self.playerScore = 0;
-            self.starsAlive = 0;
-            self.ship.reset();
+        if (rl.isKeyDown(.space)) {
+            try self.shoot();
         }
     }
 
-    fn update(self: *Arena) !void {
-        self.ship.body.update();
+    fn shoot(self: *Arena) !void {
+        const ts = std.time.milliTimestamp();
 
-        if (self.starsAlive == 0) {
-            try self.generateStars();
+        if (ts - self.lastShootAt < SHOOTING_THROTTLE_DURATION) {
+            return;
         }
 
-        self.checkShipCatches();
+        try self.projectiles.add(
+            projectile.Projectile.init(
+                self.player.position,
+                self.player.velocity,
+                self.player.rotation,
+            ),
+        );
+
+        self.lastShootAt = ts;
+
+        rl.playSound(self.sounds.fire);
     }
 
-    fn generateStars(self: *Arena) !void {
-        if (self.playerScore == 0) {
-            return self.generateInitialStars();
-        }
+    fn updateProjectiles(self: *Arena) void {
+        var iter = self.projectiles.iter();
 
-        for (self.stars.items) |*star| {
-            star.shuffle(self.rand);
-        }
+        while (iter.next()) |node| {
+            node.data.update();
 
-        for (0..@divTrunc(self.playerScore, 4)) |_| {
-            try self.stars.append(starl.Star.init(self.rand));
-        }
+            if (!node.data.isVisible(self.screen)) {
+                self.projectiles.remove(node);
+                std.log.debug("arena: updateProjectiles: removed projectile", .{});
 
-        self.starsAlive = self.stars.items.len;
-    }
-
-    fn generateInitialStars(self: *Arena) !void {
-        self.stars.clearAndFree();
-
-        for (0..initialStarsConut) |_| {
-            try self.stars.append(starl.Star.init(self.rand));
-        }
-
-        self.starsAlive = 5;
-        return;
-    }
-
-    fn checkShipCatches(self: *Arena) void {
-        for (self.stars.items) |*star| {
-            if (self.ship.body.collides(&star.body)) {
-                self.playerScore += 1;
-                self.starsAlive -= 1;
-
-                star.body.visible = false;
                 continue;
             }
 
-            star.body.update();
+            if (self.checkProjectileCollision(&node.data) catch true) {
+                std.log.debug("arena: updateProjectiles: projectile collided with asteroid, removed", .{});
+                self.projectiles.remove(node);
+            }
         }
     }
 
-    fn drawObjects(self: *Arena) void {
-        drawScore(self.playerScore);
-        drawFPS();
-        drawWorkingRegionSeparator();
+    fn updateAsteroids(self: *Arena) void {
+        if (self.asteroids.items.len < ASTEROIDS_MIN_COUNT) {
+            for (self.asteroids.items.len..ASTEROIDS_MIN_COUNT) |_| {
+                const a = self.generateRandomAsteroid();
 
-        self.ship.body.draw();
-
-        for (self.stars.items) |*star| {
-            star.body.draw();
+                self.asteroids.add(a) catch unreachable;
+            }
         }
+
+        var iter = self.asteroids.iter();
+
+        while (iter.next()) |node| {
+            node.data.update();
+
+            if (!node.data.isVisible(self.screen)) {
+                self.asteroids.remove(node);
+
+                std.log.debug("arena: updateAsteroids: removed asteroid", .{});
+            }
+        }
+    }
+
+    fn generateRandomAsteroid(self: *Arena) asteroid.Asteroid {
+        const randomHeight = self.rand.boolean();
+        const level = self.rand.enumValue(asteroid.Asteroid.Level);
+
+        var position: rl.Vector2 = .{ .x = 0, .y = 0 };
+
+        if (randomHeight) {
+            position.y = @as(f32, @floatFromInt(self.rand.intRangeAtMost(i32, 0, rl.getScreenHeight())));
+            position.x = -level.radius() + 1;
+        } else {
+            position.x = @as(f32, @floatFromInt(self.rand.intRangeAtMost(i32, 0, rl.getScreenWidth())));
+            position.y = -level.radius() + 1;
+        }
+
+        return asteroid.Asteroid.init(position, level, self.rand);
+    }
+
+    fn checkProjectileCollision(self: *Arena, p: *const projectile.Projectile) !bool {
+        const bbox = p.getBbox();
+
+        var iter = self.asteroids.iter();
+        while (iter.next()) |node| {
+            if (!node.data.isVisible(self.screen)) {
+                continue;
+            }
+
+            if (node.data.collides(bbox)) {
+                try self.handleProjectileHit(&node.data);
+
+                self.asteroids.remove(node);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    fn handleProjectileHit(self: *Arena, a: *const asteroid.Asteroid) !void {
+        self.playerScore += a.level.destructionPoints();
+
+        switch (a.level) {
+            .SMALL => rl.playSound(self.sounds.bang_small),
+            .MEDIUM => rl.playSound(self.sounds.bang_medium),
+            .LARGE => rl.playSound(self.sounds.bang_large),
+        }
+
+        const separatesIn = a.level.separatesInto();
+
+        for (0..separatesIn.count) |_| {
+            try self.addAsteroid(a.position, separatesIn.level);
+        }
+    }
+
+    fn updatePlayer(self: *Arena) void {
+        self.player.update();
+    }
+
+    pub fn draw(self: *Arena) void {
+        rl.beginDrawing();
+        defer rl.endDrawing();
+
+        rl.clearBackground(rl.Color.black);
+
+        drawScore(self.playerScore);
+        drawPlayerLifes(self.playerLifes);
+        // drawFPS();
+
+        self.drawer.draw(&self.player, &self.projectiles, &self.asteroids);
     }
 
     fn drawScore(score: u32) void {
@@ -145,16 +235,11 @@ pub const Arena = struct {
         );
     }
 
-    fn drawFPS() void {
-        rl.drawText(rl.textFormat("FPS: %i", .{rl.getFPS()}), 10, 35, 10, rl.Color.green);
+    fn drawPlayerLifes(lifes: u32) void {
+        rl.drawText(rl.textFormat("Lifes: %i", .{lifes}), 10, 35, 20, rl.Color.green);
     }
 
-    fn drawWorkingRegionSeparator() void {
-        const region = shipl.Ship.workingRegion();
-
-        rl.drawLineEx(rl.Vector2{ .x = -5, .y = region.y }, rl.Vector2{
-            .x = region.width + 5,
-            .y = region.y,
-        }, 1, rl.Color.dark_gray);
+    fn drawFPS() void {
+        rl.drawText(rl.textFormat("FPS: %i", .{rl.getFPS()}), 10, 35, 10, rl.Color.green);
     }
 };

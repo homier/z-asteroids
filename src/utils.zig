@@ -8,6 +8,13 @@ pub fn screenHeight() f32 {
     return @as(f32, @floatFromInt(rl.getScreenHeight()));
 }
 
+pub fn screenMiddle() rl.Vector2 {
+    return rl.Vector2{
+        .x = screenWidth() / 2,
+        .y = screenHeight() / 2,
+    };
+}
+
 pub fn screenRectangle() rl.Rectangle {
     return rl.Rectangle.init(0, 0, screenWidth(), screenHeight());
 }
