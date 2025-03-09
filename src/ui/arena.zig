@@ -5,11 +5,12 @@ const projectile = @import("../entities/projectile.zig");
 const asteroid = @import("../entities/asteroid.zig");
 const notification = @import("../entities/notification.zig");
 
+const textures = @import("../resources/textures.zig");
+
 const player_renderer = @import("player.zig");
 const projectile_renderer = @import("projectile.zig");
 const asteroid_renderer = @import("asteroid.zig");
 const notification_renderer = @import("notification.zig");
-const textures = @import("textures.zig");
 
 const base = @import("base.zig");
 
@@ -33,9 +34,7 @@ pub const ArenaRenderer = struct {
 
     playerMaxLifes: u8,
 
-    pub fn init(debug: bool, playerMaxLifes: u8) !Self {
-        const t = try textures.Textures.load();
-
+    pub fn init(debug: bool, playerMaxLifes: u8, t: textures.Textures) !Self {
         return .{
             .debug = debug,
             .player = player_renderer.PlayerRenderer.init(debug, t.player),

@@ -9,12 +9,19 @@ pub const Sounds = struct {
 
     pub fn load() !Sounds {
         return .{
-            .fire = try rl.loadSound("resources/audio/fire.wav"),
-            .bang_small = try rl.loadSound("resources/audio/bang_small.wav"),
-            .bang_medium = try rl.loadSound("resources/audio/bang_medium.wav"),
-            .bang_large = try rl.loadSound("resources/audio/bang_large.wav"),
-            .thrust = try rl.loadSound("resources/audio/thrust.wav"),
+            .fire = try loadSound(@embedFile("sounds_fire"), "fire.wav"),
+            .bang_small = try loadSound(@embedFile("sounds_bang_small"), "bang_small.wav"),
+            .bang_medium = try loadSound(@embedFile("sounds_bang_medium"), "bang_medium.wav"),
+            .bang_large = try loadSound(@embedFile("sounds_bang_large"), "bang_large.wav"),
+            .thrust = try loadSound(@embedFile("sounds_thrust"), "thrust.wav"),
         };
+    }
+
+    fn loadSound(comptime data: anytype, _: [:0]const u8) !rl.Sound {
+        const wave = try rl.loadWaveFromMemory(".wav", data);
+        defer rl.unloadWave(wave);
+
+        return rl.loadSoundFromWave(wave);
     }
 
     pub fn deinit(self: *const Sounds) void {

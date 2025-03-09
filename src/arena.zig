@@ -11,6 +11,7 @@ const notification = @import("./entities/notification.zig");
 const arena_renderer = @import("./ui/arena.zig");
 
 const sound_resources = @import("./resources/sounds.zig");
+const texture_resources = @import("./resources/textures.zig");
 
 const SHOOTING_THROTTLE_DURATION = 200; // 0.2 sec
 const ASTEROIDS_MIN_COUNT = 8;
@@ -35,11 +36,13 @@ pub const Arena = struct {
 
     screen: rl.Rectangle,
     sounds: sound_resources.Sounds,
+    textures: texture_resources.Textures,
 
     pub fn init(
         allocator: std.mem.Allocator,
         rand: *const std.Random,
         sounds: sound_resources.Sounds,
+        textures: texture_resources.Textures,
     ) !Arena {
         return .{
             .allocator = allocator,
@@ -50,10 +53,11 @@ pub const Arena = struct {
             .asteroids = asteroid.AsteroidRegistry.init(allocator),
             .notifications = notification.NotificationRegistry.init(allocator),
 
-            .renderer = try arena_renderer.ArenaRenderer.init(false, PLAYER_LIFES_AMOUNT),
+            .renderer = try arena_renderer.ArenaRenderer.init(false, PLAYER_LIFES_AMOUNT, textures),
 
             .screen = utils.screenRectangle(),
             .sounds = sounds,
+            .textures = textures,
         };
     }
 

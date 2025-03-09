@@ -1,5 +1,21 @@
 const std = @import("std");
 
+fn addResources(b: *std.Build, exe: *std.Build.Step.Compile) void {
+    const resources = [_]struct { []const u8, []const u8 }{
+        .{ "resources/audio/fire.wav", "sounds_fire" },
+        .{ "resources/audio/bang_large.wav", "sounds_bang_large" },
+        .{ "resources/audio/bang_medium.wav", "sounds_bang_medium" },
+        .{ "resources/audio/bang_small.wav", "sounds_bang_small" },
+        .{ "resources/audio/thrust.wav", "sounds_thrust" },
+        .{ "resources/textures/player.png", "textures_player" },
+    };
+
+    for (resources) |resource| {
+        const path, const name = resource;
+        exe.root_module.addAnonymousImport(name, .{ .root_source_file = b.path(path) });
+    }
+}
+
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
 // runner.
@@ -34,6 +50,8 @@ pub fn build(b: *std.Build) void {
     exe.linkLibrary(raylib_artifact);
     exe.root_module.addImport("raylib", raylib);
     exe.root_module.addImport("raygui", raygui);
+
+    addResources(b, exe);
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default

@@ -2,9 +2,9 @@ const std = @import("std");
 const rl = @import("raylib");
 
 const Arena = @import("./arena.zig").Arena;
-const asteroid = @import("entities/asteroid.zig");
 const utils = @import("utils.zig");
 const sounds = @import("resources/sounds.zig");
+const textures = @import("resources/textures.zig");
 
 const screenWidth = 1280;
 const screenHeight = 720;
@@ -32,7 +32,10 @@ pub fn main() !void {
     const soundResources = try sounds.Sounds.load();
     defer soundResources.deinit();
 
-    var arena = try Arena.init(allocator, &rand, soundResources);
+    const textureResources = try textures.Textures.load();
+    defer textureResources.deinit();
+
+    var arena = try Arena.init(allocator, &rand, soundResources, textureResources);
     defer arena.deinit();
 
     while (!rl.windowShouldClose()) {
