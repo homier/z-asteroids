@@ -1,16 +1,16 @@
 const rl = @import("raylib");
 
 const asteroid = @import("../entities/asteroid.zig");
-const drawer = @import("drawer.zig");
+const renderer = @import("renderer.zig");
 
-fn draw(debug: bool, a: asteroid.Asteroid) void {
+fn render(debug: bool, a: asteroid.Asteroid, _: usize) void {
     if (debug) {
         rl.drawCircleLinesV(a.position, a.radius, rl.Color.red);
     }
 
-    for (a.edges) |edge| {
-        rl.drawLineEx(edge.start, edge.end, 3.0, rl.Color.dark_gray);
+    for (a.edges.items) |edge| {
+        rl.drawLineEx(edge.start, edge.end, 2.0, rl.Color.light_gray);
     }
 }
 
-pub const AsteroidDrawer = drawer.Drawer(asteroid.Asteroid, draw);
+pub const AsteroidRenderer = renderer.Renderer(asteroid.Asteroid, render);

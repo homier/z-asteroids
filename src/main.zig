@@ -38,6 +38,6 @@ pub fn main() !void {
     while (!rl.windowShouldClose()) {
         try arena.handleInput();
         arena.update();
-        arena.draw();
+        arena.render();
     }
 }

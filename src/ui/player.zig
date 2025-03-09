@@ -1,8 +1,9 @@
+const std = @import("std");
 const rl = @import("raylib");
 
 const player = @import("../entities/player.zig");
 
-pub const PlayerDrawer = struct {
+pub const PlayerRenderer = struct {
     const Self = @This();
 
     debug: bool = false,
@@ -13,7 +14,7 @@ pub const PlayerDrawer = struct {
         return .{ .debug = debug, .texture = texture };
     }
 
-    pub fn draw(self: *const Self, entity: *const player.Player) void {
+    pub fn render(self: *const Self, entity: *const player.Player) void {
         if (self.debug) {
             rl.drawLineV(
                 rl.Vector2.init(entity.bbox.x, entity.bbox.y + entity.height / 2),
@@ -43,5 +44,21 @@ pub const PlayerDrawer = struct {
             entity.rotation,
             rl.Color.white,
         );
+
+        if (entity.state.s == .STUN) {
+            const textPosition = entity.position.add(.{ .x = entity.width, .y = entity.height + 10 });
+
+            const font = rl.getFontDefault() catch null;
+            if (font != null) {
+                const remainingTs = entity.state.s.lifetime() - (std.time.milliTimestamp() - entity.state.changedAt);
+                const remainingSeconds = @divTrunc(remainingTs, 1000);
+                const remainingMillis = @mod(remainingTs, 1000);
+
+                const text = rl.textFormat("SHIELD'S ON: %i.%ds", .{ remainingSeconds, remainingMillis });
+
+                rl.drawCircleLinesV(entity.position, entity.height / 2, rl.Color.dark_gray);
+                rl.drawTextEx(font.?, text, textPosition, 16, 1.0, rl.Color.dark_gray);
+            }
+        }
     }
 };

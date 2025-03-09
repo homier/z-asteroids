@@ -1,8 +1,9 @@
 const std = @import("std");
 
 const rl = @import("raylib");
-const state = @import("./player_state.zig");
 const utils = @import("./../utils.zig");
+
+const player_state = @import("player_state.zig");
 
 const TEXTURE_BOX = rl.Rectangle.init(0, 0, 128, 128);
 const RADIUS = 24;
@@ -18,9 +19,10 @@ pub const Player = struct {
     height: f32 = HEIGHT,
 
     bbox: rl.Rectangle,
-    velocity: rl.Vector2 = rl.Vector2{ .x = 0, .y = 0 },
+    velocity: rl.Vector2 = .{ .x = 0, .y = 0 },
     rotation: f32 = 0,
-    state: state.PlayerState = state.PlayerState.DEFAULT,
+
+    state: player_state.PlayerState = .{},
 
     pub fn init(position: rl.Vector2) Player {
         return .{
@@ -31,17 +33,29 @@ pub const Player = struct {
                 WIDTH,
                 HEIGHT,
             ),
+            .state = player_state.PlayerState.init(),
         };
     }
 
     pub fn update(self: *Player) void {
+        self.updateState();
         self.updatePosition();
         self.updateBbox();
         self.updateVelocity();
     }
 
+    pub fn reset(self: *Player) void {
+        self.state.reset();
+
+        self.position = utils.screenMiddle();
+        self.velocity = rl.Vector2.zero();
+        self.rotation = 0;
+
+        self.updateBbox();
+    }
+
     pub fn accelerate(self: *Player, x: f32, y: f32) void {
-        self.velocity = self.velocity.add(rl.Vector2{ .x = x, .y = y });
+        self.velocity = self.velocity.add(.{ .x = x, .y = y });
     }
 
     pub fn rotate(self: *Player, angle: f32) void {
@@ -50,6 +64,22 @@ pub const Player = struct {
 
     pub fn getActualVelocity(self: *const Player) rl.Vector2 {
         return self.velocity.rotate(std.math.degreesToRadians(self.rotation));
+    }
+
+    pub fn collides(self: *const Player, bbox: rl.Rectangle) bool {
+        if (!self.state.canCollide()) {
+            return false;
+        }
+
+        return self.bbox.checkCollision(bbox);
+    }
+
+    pub fn setState(self: *Player, state: player_state.PlayerState.State) void {
+        self.state.set(state);
+    }
+
+    fn updateState(self: *Player) void {
+        self.state.update();
     }
 
     fn updatePosition(self: *Player) void {

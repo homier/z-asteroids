@@ -33,6 +33,13 @@ pub fn EntityRegistry(comptime T: type) type {
             var node = try self.allocator.create(Queue.Node);
 
             node.data = entity;
+            self.items.append(node);
+        }
+
+        pub fn addFirst(self: *Self, entity: T) !void {
+            var node = try self.allocator.create(Queue.Node);
+
+            node.data = entity;
             self.items.prepend(node);
         }
 
@@ -46,10 +53,14 @@ pub fn EntityRegistry(comptime T: type) type {
             self.items.remove(node);
         }
 
-        pub fn deinit(self: *Self) void {
+        pub fn clear(self: *Self) void {
             while (self.items.popFirst()) |node| {
                 self.allocator.destroy(node);
             }
+        }
+
+        pub fn deinit(self: *Self) void {
+            self.clear();
         }
     };
 }

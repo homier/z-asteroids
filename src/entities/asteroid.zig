@@ -3,8 +3,7 @@ const rl = @import("raylib");
 
 const entity_registry = @import("./entity_registry.zig");
 
-const ASTEROID_EDGE_MAX_COUNT: usize = 7;
-const EDGE_SECTOR_RADIUS = std.math.pi * 2 / @as(f32, @floatFromInt(ASTEROID_EDGE_MAX_COUNT));
+const EDGE_SECTOR_RADIUS = std.math.pi / 2.7;
 
 pub const AsteroidRegistry = entity_registry.EntityRegistry(Asteroid);
 
@@ -19,6 +18,14 @@ pub const Asteroid = struct {
                 .SMALL => 25,
                 .MEDIUM => 50,
                 .LARGE => 100,
+            };
+        }
+
+        pub fn magnitude(self: Level) f32 {
+            return switch (self) {
+                .SMALL => std.math.pi / 2.0,
+                .MEDIUM => std.math.pi / 3.0,
+                .LARGE => std.math.pi / 4.0,
             };
         }
 
@@ -62,13 +69,13 @@ pub const Asteroid = struct {
     velocity: rl.Vector2,
     rotationDirection: RotationDirection,
 
-    edges: [ASTEROID_EDGE_MAX_COUNT]Edge,
+    edges: std.ArrayList(Edge),
     level: Level,
 
-    pub fn init(position: rl.Vector2, lvl: Level, rand: *const std.Random) Asteroid {
+    pub fn init(allocator: std.mem.Allocator, position: rl.Vector2, lvl: Level, rand: *const std.Random) Asteroid {
         return .{
             .position = position,
-            .edges = generateEdges(position, lvl.radius()),
+            .edges = generateEdges(allocator, rand, position, lvl.radius(), lvl.magnitude()),
             .level = lvl,
             .radius = lvl.radius(),
             .velocity = generateVelocity(rand, lvl.velocityRange()),
@@ -76,21 +83,40 @@ pub const Asteroid = struct {
         };
     }
 
-    fn generateEdges(centre: rl.Vector2, radius: f32) [ASTEROID_EDGE_MAX_COUNT]Edge {
-        var edges: [ASTEROID_EDGE_MAX_COUNT]Edge = std.mem.zeroes([ASTEROID_EDGE_MAX_COUNT]Edge);
+    pub fn deinit(self: *Asteroid) void {
+        self.edges.deinit();
+    }
 
-        for (0..ASTEROID_EDGE_MAX_COUNT) |idx| {
-            const angle = @as(f32, @floatFromInt(idx + 1)) * EDGE_SECTOR_RADIUS;
+    fn generateEdges(
+        allocator: std.mem.Allocator,
+        rand: *const std.Random,
+        centre: rl.Vector2,
+        radius: f32,
+        edgeMaxAngle: f32,
+    ) std.ArrayList(Edge) {
+        var edges = std.ArrayList(Edge).init(allocator);
+        var angleSum: f32 = 0;
+        var idx: usize = 0;
 
-            if (idx == 0) {
-                const sAngle = @as(f32, @floatFromInt(idx)) * EDGE_SECTOR_RADIUS;
-
-                edges[idx].start = getCirclePoint(centre, radius, sAngle);
-            } else {
-                edges[idx].start = edges[idx - 1].end;
+        while (angleSum < std.math.pi * 2) {
+            var angle = rand.float(f32) * (angleSum + edgeMaxAngle - angleSum) + angleSum;
+            if (angle >= std.math.pi * 2) {
+                angle = std.math.pi * 2;
             }
 
-            edges[idx].end = getCirclePoint(centre, radius, angle);
+            var edge: Edge = .{ .start = rl.Vector2.zero(), .end = rl.Vector2.zero() };
+
+            if (idx == 0) {
+                edge.start = getCirclePoint(centre, radius, 0);
+            } else {
+                edge.start = edges.items[idx - 1].end;
+            }
+
+            edge.end = getCirclePoint(centre, radius, angle);
+            edges.append(edge) catch unreachable;
+
+            idx += 1;
+            angleSum = angle;
         }
 
         return edges;
@@ -122,9 +148,9 @@ pub const Asteroid = struct {
 
         self.position = self.position.add(self.velocity);
 
-        for (0..ASTEROID_EDGE_MAX_COUNT) |idx| {
-            self.edges[idx].start = self.rotatePoint(self.edges[idx].start, cos, sin).add(self.velocity);
-            self.edges[idx].end = self.rotatePoint(self.edges[idx].end, cos, sin).add(self.velocity);
+        for (self.edges.items) |*edge| {
+            edge.start = self.rotatePoint(edge.start, cos, sin).add(self.velocity);
+            edge.end = self.rotatePoint(edge.end, cos, sin).add(self.velocity);
         }
     }
 

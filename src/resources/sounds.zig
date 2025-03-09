@@ -5,6 +5,7 @@ pub const Sounds = struct {
     bang_small: rl.Sound,
     bang_medium: rl.Sound,
     bang_large: rl.Sound,
+    thrust: rl.Sound,
 
     pub fn load() !Sounds {
         return .{
@@ -12,6 +13,7 @@ pub const Sounds = struct {
             .bang_small = try rl.loadSound("resources/audio/bang_small.wav"),
             .bang_medium = try rl.loadSound("resources/audio/bang_medium.wav"),
             .bang_large = try rl.loadSound("resources/audio/bang_large.wav"),
+            .thrust = try rl.loadSound("resources/audio/thrust.wav"),
         };
     }
 
@@ -20,5 +22,6 @@ pub const Sounds = struct {
         rl.unloadSound(self.bang_small);
         rl.unloadSound(self.bang_medium);
         rl.unloadSound(self.bang_large);
+        rl.unloadSound(self.thrust);
     }
 };
