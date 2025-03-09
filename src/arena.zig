@@ -85,10 +85,20 @@ pub const Arena = struct {
         self.updateNotifications();
     }
 
-    pub fn addAsteroid(self: *Arena, position: rl.Vector2, level: asteroid.Asteroid.Level) !void {
-        const a = asteroid.Asteroid.init(self.allocator, position, level, self.rand);
+    pub fn render(self: *Arena) void {
+        rl.beginDrawing();
+        defer rl.endDrawing();
 
-        try self.asteroids.add(a);
+        rl.clearBackground(rl.Color.black);
+
+        self.renderer.render(
+            &self.player,
+            &self.projectiles,
+            &self.asteroids,
+            &self.notifications,
+            self.playerScore,
+            self.playerLifes,
+        );
     }
 
     pub fn handleInput(self: *Arena) !void {
@@ -290,7 +300,9 @@ pub const Arena = struct {
         const separatesIn = a.level.separatesInto();
 
         for (0..separatesIn.count) |_| {
-            try self.addAsteroid(a.position, separatesIn.level);
+            const new = asteroid.Asteroid.init(self.allocator, a.position, separatesIn.level, self.rand);
+
+            try self.asteroids.add(new);
         }
     }
 
@@ -323,10 +335,16 @@ pub const Arena = struct {
         }
 
         self.playerLifes -= 1;
+
         if (self.playerLifes == 1) {
             self.notifications.addFirst(.{
                 .message = "SHIELDS ARE LOW",
                 .severity = .HIGH,
+                .createdAt = std.time.milliTimestamp(),
+            }) catch unreachable;
+        } else {
+            self.notifications.add(.{
+                .message = "We've been hit!",
                 .createdAt = std.time.milliTimestamp(),
             }) catch unreachable;
         }
@@ -334,21 +352,5 @@ pub const Arena = struct {
 
     fn updatePlayer(self: *Arena) void {
         self.player.update();
-    }
-
-    pub fn render(self: *Arena) void {
-        rl.beginDrawing();
-        defer rl.endDrawing();
-
-        rl.clearBackground(rl.Color.black);
-
-        self.renderer.render(
-            &self.player,
-            &self.projectiles,
-            &self.asteroids,
-            &self.notifications,
-            self.playerScore,
-            self.playerLifes,
-        );
     }
 };
